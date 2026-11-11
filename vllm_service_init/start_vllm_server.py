@@ -14,17 +14,17 @@ Setup Instructions:
     python your_server_file_name.py --port 5000 --model_path Qwen/Qwen3-4B-Base
 '''
 
-from flask import Flask, request, jsonify
-import vllm
-import argparse
+from flask import Flask, request, jsonify # 接收 HTTP 请求
+import vllm # 负责生成
+import argparse # 接收命令行参数
 import json
 import os
 import threading
 import time
 import torch
 from transformers import AutoTokenizer
-from mathruler.grader import extract_boxed_content, grade_answer
-import stopit  # 1. Import the thread-safe 'stopit' library
+from mathruler.grader import extract_boxed_content, grade_answer # 负责提取和比较答案
+import stopit  # 1. Import the thread-safe 'stopit' library 给比较答案的函数加超时
 
 # ------------------------- Command-Line Arguments ------------------------- #
 # (This section remains unchanged)
@@ -38,23 +38,23 @@ args = parser.parse_args()
 # ------------------------- vLLM Initialization ------------------------ #
 # (This section remains unchanged)
 print('[init] Loading model...')
-
+# 拿到一个tokenizer对象，方便后续处理
 tokenizer = AutoTokenizer.from_pretrained(args.model_path)
+# 创建一个vLLM模型对象，指定模型路径、tokenizer和GPU内存利用率
 model = vllm.LLM(
     model=args.model_path,
     tokenizer=args.model_path,
     gpu_memory_utilization=args.gpu_mem_util,
 )
-
+# 设置采样参数，指定最大生成长度、温度、top-p、top-k等
 sample_params = vllm.SamplingParams(
-    max_tokens=4096,
+    max_tokens=4096, # 停止条件之一：如果模型生成的 token 数量超过 4096，就停止生成
     temperature=1.0,
-    top_p=1.0,
-    top_k=40,
-    stop_token_ids=[tokenizer.eos_token_id],
-    n=10, # Generate 10 candidate answers for each question
+    top_p=1.0, # 在这里不额外按累计概率裁剪
+    top_k=40, # 每一步从概率最高的 40 个候选 token 中采样
+    stop_token_ids=[tokenizer.eos_token_id], # 停止条件之一：如果模型刚生成的 token 是「结束」，这条回答就到此为止
+    n=10, # 每道题生成的候选答案数量
 )
-
 # ---------------------- GPU Idle Utilization Thread ---------------------- #
 # (This section remains unchanged)
 stop_event = threading.Event()    # Event to stop the thread globally
