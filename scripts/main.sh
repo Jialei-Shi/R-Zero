@@ -1,3 +1,5 @@
+set -e
+
 Base_model=$1
 Model_abbr=$2
 echo "Model_abbr: $Model_abbr"
@@ -44,5 +46,4 @@ for i in {2..5}; do
         ${Model_abbr}_solver_v${i}
 done
 
-# 单独评测初始模型，作为baseline
-bash evaluation/evaluate.bash $Base_model
+# 原版外部基准评测含四卡任务，训练与导出结束后退出。

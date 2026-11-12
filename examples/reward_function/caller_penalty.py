@@ -48,6 +48,8 @@ def cluster_share_per_problem(
         linkage: str = "average"):
     if not problems:
         return []
+    if len(problems) == 1:
+        return [1.0]
     print('start clustering')
     start_time = time.time()
     dist_mat = _bleu_distance_matrix(problems)
@@ -78,29 +80,30 @@ def split_list(lst, n=4):
 os.environ["NO_PROXY"] = "0.0.0.0,127.0.0.1"
 
 def fetch(index,i):
-    response = requests.get(f"http://0.0.0.0:{5000+index}/hello?name={i}")
+    response = requests.get(f"http://127.0.0.1:{5000+index}/hello", params={"name": i}, timeout=(10, 1800))
+    response.raise_for_status()
     print(response)
     return True
 
-def generate_results(data):
-    datas = split_list(data,4)
-    random_names = [generate_temp_filename(prefix=f"temp_{i}", suffix=".json") for i in range(4)]
-    for i in range(4):
+def generate_results(data, reward_workers=4):
+    datas = split_list(data, reward_workers)
+    random_names = [generate_temp_filename(prefix=f"temp_{i}", suffix=".json") for i in range(reward_workers)]
+    for i in range(reward_workers):
         with open(random_names[i],'w') as f:
             json.dump(datas[i],f,indent=4)
 
     final_results = []
-    with ThreadPoolExecutor(max_workers=4) as executor:
-        futures = [executor.submit(fetch, i,random_names[i]) for i in range(4)]
+    with ThreadPoolExecutor(max_workers=reward_workers) as executor:
+        futures = [executor.submit(fetch, i,random_names[i]) for i in range(reward_workers)]
 
         for future in as_completed(futures):
             print(future.result())
 
-    for i in range(4):
+    for i in range(reward_workers):
         with open(random_names[i].replace('.json','_results.json'),'r') as f:
             final_results.extend(json.load(f))
         # os.remove(random_names[i].replace('.json','_results.json'))
-    for i in range(4):
+    for i in range(reward_workers):
         os.remove(random_names[i].replace('.json','_results.json'))
     return final_results
 
@@ -115,7 +118,7 @@ def accuracy_reward(predict: str, ground_truth: str) -> float:
     return 1.0 if grade_answer(answer, ground_truth) else 0.0
 
 
-def compute_score(predicts: List[str], ground_truths: List[str], format_weight: float = 0.1, file_path: str = "") -> List[Dict[str, float]]:
+def compute_score(predicts: List[str], ground_truths: List[str], format_weight: float = 0.1, file_path: str = "", reward_workers: int = 4) -> List[Dict[str, float]]:
     results = []
     with open('test.json','w') as f:
         json.dump(predicts,f,indent=4)
@@ -132,7 +135,7 @@ def compute_score(predicts: List[str], ground_truths: List[str], format_weight: 
         else:
             results.append({"question": "", "answer": ""})
 
-    final_results = generate_results(results)
+    final_results = generate_results(results, reward_workers)
     penalty = cluster_share_per_problem([result['question'] for result in final_results], distance_threshold=0.5)
     # print(penalty)
     assert len(penalty) == len(final_results)

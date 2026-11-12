@@ -1,6 +1,6 @@
 data:
-  train_files: hiyouga/math12k@train
-  val_files: hiyouga/math12k@test
+  train_files: /media/disk2/sjl/datasets/math12k/train.parquet
+  val_files: /media/disk2/sjl/datasets/math12k/test.parquet
   prompt_key: problem
   answer_key: answer
   image_key: images
@@ -80,7 +80,7 @@ trainer:
   max_steps: null
   project_name: easy_r1
   experiment_name: qwen2_5_7b_math_grpo
-  logger: ["console", "wandb"]
+  logger: ["console"]
   nnodes: 1
   n_gpus_per_node: 8
   val_freq: 3  # -1 to disable
