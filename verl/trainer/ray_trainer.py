@@ -398,6 +398,13 @@ class RayPPOTrainer:
 
     def _save_checkpoint(self) -> None:
         # path: {save_checkpoint_path}/global_step_{global_step}/{actor,critic}
+        if self.config.trainer.save_weights_only:
+            actor_path = os.path.join(
+                self.config.trainer.save_checkpoint_path, f"global_step_{self.global_step}", "actor"
+            )
+            self.actor_rollout_wg.save_checkpoint(actor_path, weights_only=True)
+            return
+
         remove_obsolete_ckpt(
             self.config.trainer.save_checkpoint_path, self.global_step, self.config.trainer.save_limit
         )
@@ -608,7 +615,12 @@ class RayPPOTrainer:
 
                         metrics.update(val_metrics)
 
-                    if self.config.trainer.save_freq > 0 and self.global_step % self.config.trainer.save_freq == 0:
+                    save_freq = self.config.trainer.save_freq
+                    if save_freq > 0 and (
+                        self.global_step == save_freq
+                        if self.config.trainer.save_weights_only
+                        else self.global_step % save_freq == 0
+                    ):
                         with timer("save_checkpoint", timing_raw):
                             self._save_checkpoint()
 
@@ -632,5 +644,7 @@ class RayPPOTrainer:
 
             print(f"Final validation metrics: {convert_dict_to_str(val_metrics)}")
 
-        if self.config.trainer.save_freq <= 0 or self.global_step % self.config.trainer.save_freq != 0:
+        if not self.config.trainer.save_weights_only and (
+            self.config.trainer.save_freq <= 0 or self.global_step % self.config.trainer.save_freq != 0
+        ):
             self._save_checkpoint()

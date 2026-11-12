@@ -88,6 +88,7 @@ class TrainerConfig:
     val_generations_to_log: int = 0
     save_freq: int = -1
     save_limit: int = -1
+    save_weights_only: bool = False
     save_checkpoint_path: Optional[str] = None
     load_checkpoint_path: Optional[str] = None
 

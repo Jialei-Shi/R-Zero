@@ -17,7 +17,7 @@ from typing import Optional, Union
 
 import torch
 import torch.distributed as dist
-from torch.distributed.checkpoint.state_dict import StateDictOptions, get_state_dict, set_state_dict
+from torch.distributed.checkpoint.state_dict import StateDictOptions, get_model_state_dict, get_state_dict, set_state_dict
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from transformers import PreTrainedModel, PreTrainedTokenizer, ProcessorMixin
 
@@ -77,27 +77,27 @@ class FSDPCheckpointManager(BaseCheckpointManager):
         if "rng" in extra_state_dict:
             self.load_rng_state(extra_state_dict["rng"])
 
-    def save_checkpoint(self, path: str):
+    def save_checkpoint(self, path: str, weights_only: bool = False):
         path = self.local_mkdir(path)
         dist.barrier()
 
-        # every rank will save its own model and optim shard
-        state_dict_options = StateDictOptions(cpu_offload=True)
-        model_state_dict, optim_state_dict = get_state_dict(self.model, self.optimizer, options=state_dict_options)
-        extra_state_dict = {
-            "lr_scheduler": self.lr_scheduler.state_dict(),
-            "rng": self.get_rng_state(),
-        }
+        options = StateDictOptions(cpu_offload=True)
         model_path = os.path.join(path, f"model_world_size_{self.world_size}_rank_{self.rank}.pt")
-        optim_path = os.path.join(path, f"optim_world_size_{self.world_size}_rank_{self.rank}.pt")
-        extra_path = os.path.join(path, f"extra_state_world_size_{self.world_size}_rank_{self.rank}.pt")
+        if weights_only:
+            model_state_dict = get_model_state_dict(self.model, options=options)
+        else:
+            model_state_dict, optim_state_dict = get_state_dict(self.model, self.optimizer, options=options)
 
         print(f"[rank-{self.rank}]: Saving model to {os.path.abspath(model_path)}.")
-        print(f"[rank-{self.rank}]: Saving optimizer to {os.path.abspath(optim_path)}.")
-        print(f"[rank-{self.rank}]: Saving extra_state to {os.path.abspath(extra_path)}.")
         torch.save(model_state_dict, model_path)
-        torch.save(optim_state_dict, optim_path)
-        torch.save(extra_state_dict, extra_path)
+        if not weights_only:
+            optim_path = os.path.join(path, f"optim_world_size_{self.world_size}_rank_{self.rank}.pt")
+            extra_path = os.path.join(path, f"extra_state_world_size_{self.world_size}_rank_{self.rank}.pt")
+            extra_state_dict = {"lr_scheduler": self.lr_scheduler.state_dict(), "rng": self.get_rng_state()}
+            print(f"[rank-{self.rank}]: Saving optimizer to {os.path.abspath(optim_path)}.")
+            print(f"[rank-{self.rank}]: Saving extra_state to {os.path.abspath(extra_path)}.")
+            torch.save(optim_state_dict, optim_path)
+            torch.save(extra_state_dict, extra_path)
 
         # wait for everyone to dump to local
         dist.barrier()

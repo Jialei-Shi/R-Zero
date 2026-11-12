@@ -48,7 +48,7 @@ echo "Start training questioner: $questioner_model_path -> $save_path"
 # format_prompt：用 questioner.jinja 把输入组织成出题提示。
 # rollout.n=4：每个提示生成 4 条响应，当前每批 8 个提示共生成 32 条响应。
 # actor.global_batch_size=4：每个更新分组对应 4 个提示，共 16 条响应。
-# save_freq=1：每个训练步保存一次 checkpoint；下方合并命令取第 5 步的权重。
+# 只保存第 5 步的模型权重，训练结束后合并为 Hugging Face 模型。
 
 # 缩小例子（同一个全局步）
 # 采样：A、B、C、D 各生成 4 条响应，共 16 条。
@@ -79,14 +79,19 @@ CUDA_VISIBLE_DEVICES=0 python3 -m verl.trainer.main \
     worker.actor.micro_batch_size_per_device_for_update=1 \
     worker.actor.micro_batch_size_per_device_for_experience=1 \
     trainer.max_steps=6 \
-    trainer.save_freq=1
+    trainer.save_freq=5 \
+    trainer.save_weights_only=true
 
 stop_scorer
 trap - EXIT
 
 # 合并模型
 echo "merging model"
-python scripts/model_merger.py --local_dir ${STORAGE_PATH}/models/$save_path/global_step_5/actor
+actor_dir="${STORAGE_PATH}/models/$save_path/global_step_5/actor"
+python scripts/model_merger.py --local_dir "$actor_dir"
+test -s "$actor_dir/huggingface/config.json"
+compgen -G "$actor_dir/huggingface/*.safetensors" >/dev/null
+rm -f -- "$actor_dir"/model_world_size_*_rank_*.pt
 
 
 echo "questioner training finished"

@@ -57,13 +57,19 @@ python3 -m verl.trainer.main \
     "data.train_files=$solver_train_data" \
     trainer.total_epochs=100 \
     trainer.max_steps=20 \
+    trainer.save_freq=15 \
+    trainer.save_weights_only=true \
     data.format_prompt=./examples/format_prompt/solver.jinja \
     trainer.val_freq=4 \
     worker.actor.micro_batch_size_per_device_for_update=1 \
     worker.actor.micro_batch_size_per_device_for_experience=1 \
 
 echo "merging model"
-python scripts/model_merger.py --local_dir ${STORAGE_PATH}/models/${experiment_name}/global_step_15/actor
+actor_dir="${STORAGE_PATH}/models/${experiment_name}/global_step_15/actor"
+python scripts/model_merger.py --local_dir "$actor_dir"
+test -s "$actor_dir/huggingface/config.json"
+compgen -G "$actor_dir/huggingface/*.safetensors" >/dev/null
+rm -f -- "$actor_dir"/model_world_size_*_rank_*.pt
 
 sleep 10
 
