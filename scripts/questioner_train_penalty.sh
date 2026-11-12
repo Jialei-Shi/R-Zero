@@ -12,9 +12,9 @@ if curl -s --noproxy 127.0.0.1 --max-time 2 http://127.0.0.1:5000/ >/dev/null; t
     exit 1
 fi
 
-# GPU 0 给 Solver 打分，GPU 1 训练 Questioner。
+# Solver 打分与 Questioner 训练共用 GPU 0。
 CUDA_VISIBLE_DEVICES=0 python vllm_service_init/start_vllm_server.py \
-    --port 5000 --model_path "$solver_model_path" --gpu_mem_util 0.50 &
+    --port 5000 --model_path "$solver_model_path" --gpu_mem_util 0.20 &
 scorer_pid=$!
 stop_scorer() {
     kill "$scorer_pid" 2>/dev/null || true
@@ -37,7 +37,7 @@ done
 echo "Start training questioner: $questioner_model_path -> $save_path"
 
 # Questioner 训练参数：先读取 config 指定的 YAML，再用下面的 key=value 覆盖对应配置。
-# CUDA_VISIBLE_DEVICES=1：Questioner 只在物理 GPU 1 上训练。
+# CUDA_VISIBLE_DEVICES=0：Questioner 在物理 GPU 0 上训练。
 # max_response_length=4096：限制每条 Questioner 输出的最大生成长度（token 数）。
 # model_path：从 questioner_model_path 加载要更新的 Questioner（actor）权重。
 # experiment_name：用 save_path 标识本轮实验。
@@ -57,7 +57,7 @@ echo "Start training questioner: $questioner_model_path -> $save_path"
 # 再用 C+D 的 8 条响应更新一次。处理完这两组，就完成一个全局步。
 # 实际配置每个全局步有 8 ÷ 4 = 2 个 minibatch，每组含 16 条响应。
 
-CUDA_VISIBLE_DEVICES=1 python3 -m verl.trainer.main \
+CUDA_VISIBLE_DEVICES=0 python3 -m verl.trainer.main \
     config=examples/config.yaml \
     data.rollout_batch_size=8 \
     data.val_batch_size=8 \
@@ -71,7 +71,7 @@ CUDA_VISIBLE_DEVICES=1 python3 -m verl.trainer.main \
     trainer.n_gpus_per_node=1 \
     worker.reward.reward_function_kwargs.reward_workers=1 \
     worker.rollout.tensor_parallel_size=1 \
-    worker.rollout.gpu_memory_utilization=0.40 \
+    worker.rollout.gpu_memory_utilization=0.30 \
     worker.rollout.enforce_eager=true \
     data.format_prompt=./examples/format_prompt/questioner.jinja \
     worker.rollout.n=4 \

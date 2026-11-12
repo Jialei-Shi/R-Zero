@@ -1,6 +1,6 @@
 data:
-  train_files: /media/disk2/sjl/datasets/math12k/train.parquet
-  val_files: /media/disk2/sjl/datasets/math12k/test.parquet
+  train_files: /root/autodl-tmp/rzero/datasets/train.parquet
+  val_files: /root/autodl-tmp/rzero/datasets/test.parquet
   prompt_key: problem
   answer_key: answer
   image_key: images

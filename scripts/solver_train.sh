@@ -9,13 +9,13 @@ echo $STORAGE_PATH
 
 echo "start train solver $experiment_name $solver_model_path $questioner_model_path" 
 
-export CUDA_VISIBLE_DEVICES=0,1 VLLM_USE_V1=0 VLLM_DISABLE_COMPILE_CACHE=1
+export CUDA_VISIBLE_DEVICES=0 VLLM_USE_V1=0 VLLM_DISABLE_COMPILE_CACHE=1
 
 echo 'start generate question'
 generation_pids=()
-for gpu in 0 1; do
+for gpu in 0; do
     CUDA_VISIBLE_DEVICES=$gpu python question_generate/question_generate.py \
-        --model "$questioner_model_path" --suffix "$gpu" --num_samples 1000 --save_name "$experiment_name" &
+        --model "$questioner_model_path" --suffix "$gpu" --num_samples 2000 --save_name "$experiment_name" &
     generation_pids+=("$!")
 done
 generation_status=0
@@ -26,7 +26,7 @@ done
 
 echo 'start evaluate generated question'
 scoring_pids=()
-for gpu in 0 1; do
+for gpu in 0; do
     CUDA_VISIBLE_DEVICES=$gpu python question_evaluate/evaluate.py \
         --model "$solver_model_path" --suffix "$gpu" --save_name "$experiment_name" &
     scoring_pids+=("$!")
@@ -37,14 +37,14 @@ for pid in "${scoring_pids[@]}"; do
 done
 (( scoring_status == 0 )) || exit 1
 echo 'save Solver training data locally'
-python question_evaluate/upload.py --local_output "$solver_train_data" --num_shards 2 \
+python question_evaluate/upload.py --local_output "$solver_train_data" --num_shards 1 \
     --max_score 0.8 --min_score 0.3 --experiment_name "$experiment_name" || exit 1
 echo 'start train'
 
 python3 -m verl.trainer.main \
     config=examples/config.yaml \
-    trainer.n_gpus_per_node=2 \
-    worker.rollout.tensor_parallel_size=2 \
+    trainer.n_gpus_per_node=1 \
+    worker.rollout.tensor_parallel_size=1 \
     worker.rollout.gpu_memory_utilization=0.40 \
     worker.rollout.enforce_eager=true \
     data.rollout_batch_size=16 \
